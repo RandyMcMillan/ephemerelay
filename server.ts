@@ -35,9 +35,15 @@ function connectStream(socket: WebSocket): void {
         return;
     }
 
-    function handleEvent(event: Event) {
-      emitter.emit('event', event);
-      socket.send(JSON.stringify(['OK', event.id, true, '']));
+    function handleEvent(data: { id: string }) {
+      const result = eventSchema.safeParse(data);
+      if (result.success) {
+        const event = result.data;
+        emitter.emit('event', event);
+        socket.send(JSON.stringify(['OK', event.id, true, '']));
+      } else {
+        socket.send(JSON.stringify(['OK', data.id, false, 'invalid: schema or signature']));
+      }
     }
 
     function handleReq(sub: string, filter: Filter) {
@@ -112,7 +118,7 @@ const eventSchema = z.object({
 }).refine((event) => verifySignature(event));
 
 const relayMsgSchema = z.union([
-  z.tuple([z.literal('EVENT'), eventSchema]),
+  z.tuple([z.literal('EVENT'), z.object({ id: z.string() }).passthrough()]),
   z.tuple([z.literal('REQ'), z.string(), filterSchema]),
   z.tuple([z.literal('CLOSE'), z.string()]),
 ]);
